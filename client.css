@@ -1,0 +1,8 @@
+.incomingVideo {
+    width: 240px;
+}
+
+.outgoingVideo {
+    width: 240px;
+    align-content: end;
+}

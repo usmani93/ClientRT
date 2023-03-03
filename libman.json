@@ -1,0 +1,15 @@
+{
+  "version": "1.0",
+  "defaultProvider": "cdnjs",
+  "libraries": [
+    {
+      "library": "webrtc-adapter@8.2.1",
+      "destination": "lib/webrtc-adapter/"
+    },
+    {
+      "provider": "unpkg",
+      "library": "@microsoft/signalr@7.0.3",
+      "destination": "lib/microsoft/signalr/"
+    }
+  ]
+}

@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <link rel="stylesheet" href="client.css" />
+    <title>Realtime communication with WebRTC</title>
+
+</head>
+
+<body>
+
+    <h1>Realtime communication with WebRTC</h1>
+    <h2 id="connectionId">Connecting...</h2>
+
+    <ul id="connectedUsers"></ul>
+
+    <video id="outgoingVideo" autoplay playsinline class="outgoingVideo"></video>
+    <video id="incomingVideo" autoplay playsinline class="incomingVideo"></video>
+
+    <div>
+        <button id="startButton">Start</button>
+        <button id="callButton">Call</button>
+        <button id="hangupButton">Hang Up</button>
+    </div>
+
+    <div>
+        <label>User Name: </label>
+        <input id="userName" />
+    </div>
+    <div>
+        <label>Message: </label>
+        <input id="message" />
+    </div>
+
+    <div>
+        <button onclick="getId()">Get Id</button>
+        <button onclick="sendMessage()">Send Message</button>
+        <button onclick="onDisconnect()">Disconnect</button>
+    </div>
+
+    <div>
+        <label id="messageReceived"></label>
+    </div>
+
+    <script src="lib/microsoft/signalr/dist/browser/signalr.js"></script>
+    <script src="client.js"></script>
+</body>
+
+</html>
