@@ -327,3 +327,10 @@ const callbackIceCandidate = (evt, connection, partnerClientId) => {
         sendHubSignal(JSON.stringify({ "candidate": null }), partnerClientId);
     }
 }
+
+const errorHandler = (error) => {
+    if (error.message)
+        console.log(JSON.stringify(error.message));
+    else
+        console.log(JSON.stringify(error));
+};
