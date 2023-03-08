@@ -24,7 +24,7 @@ const onStreamRemoved = (connection, streamId) => {
 
 const mediaStreamConstraints = {
     video: true,
-    audio: false
+    audio: true
 };
 
 let localStream;
