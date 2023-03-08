@@ -19,8 +19,8 @@ const errorHandler = (error) => {
 };
 
 const mediaStreamConstraints = {
-    video: false,
-    audio: true
+    video: true,
+    audio: false
 };
 
 let localStream;
