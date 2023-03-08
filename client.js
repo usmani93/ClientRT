@@ -40,7 +40,7 @@ function handleLocalMediaStreamError(error) {
 const hubConnection = new signalR.HubConnectionBuilder()
     .configureLogging(signalR.LogLevel.Debug)
     //.withUrl("https://localhost:7124/hub/rthub")
-    .withUrl("https://54.193.100.75:5000/hub/rthub")
+    .withUrl("http://54.193.100.75:5000/hub/rthub")
     .build();
     
 startConnection();
