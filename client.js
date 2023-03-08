@@ -18,6 +18,10 @@ const errorHandler = (error) => {
         console.log(JSON.stringify(error));
 };
 
+const onStreamRemoved = (connection, streamId) => {
+    console.log("WebRTC: onStreamRemoved -> Removing stream: ");
+}
+
 const mediaStreamConstraints = {
     video: true,
     audio: false
@@ -98,6 +102,10 @@ function getId(){
             connectedUsers.appendChild(li);
         });
     });
+
+    function onDisconnect(){
+        hubConnection.invoke('onDisconnectedAsync');
+    }
 
     function onclickUser(item){
         console.log('calling user... ');
@@ -261,7 +269,7 @@ const newSignal = (partnerClientId, data) => {
         receivedCandidateSignal(connection, partnerClientId, signal.candidate);
     } else {
         console.log('WebRTC: adding null candidate');
-        connection.addIceCandidate(null, () => console.log("WebRTC: added null candidate successfully"), () => console.log("WebRTC: cannot add null candidate"));
+        connection.addIceCandidate(null);
     }
 }
 
@@ -297,11 +305,8 @@ const receivedCandidateSignal = (connection, partnerClientId, candidate) => {
     //console.log('candidate', candidate);
     //if (candidate) {
     console.log('WebRTC: adding full candidate');
-    connection.addIceCandidate(new RTCIceCandidate(candidate), () => console.log("WebRTC: added candidate successfully"), () => console.log("WebRTC: cannot add candidate"));
-    //} else {
-    //    console.log('WebRTC: adding null candidate');
-    //   connection.addIceCandidate(null, () => console.log("WebRTC: added null candidate successfully"), () => console.log("WebRTC: cannot add null candidate"));
-    //}
+    connection.addIceCandidate(new RTCIceCandidate(candidate));
+  
 }
 
 const callbackAddStream = (connection, evt) => {
