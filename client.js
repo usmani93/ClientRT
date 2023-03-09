@@ -31,16 +31,16 @@ let localStream;
 
 const configuration = { iceServers: [{ urls: "stun:stun.l.google.com:19302" }] };
 
-//get video stream and show it to as outgoing video
-navigator.mediaDevices.getUserMedia(mediaStreamConstraints)
-    .then(getLocalMediaStream)
-    .catch(handleLocalMediaStreamError);
+function getMediaDevices() {
+    //get video stream and show it to as outgoing video
+    navigator.mediaDevices.getUserMedia(mediaStreamConstraints)
+        .then(getLocalMediaStream)
+        .catch(handleLocalMediaStreamError);
+}
 
 function getLocalMediaStream(mediaStream) {
     localStream = mediaStream;
     outgoingVideo.srcObject = mediaStream;
-
-    //localStream.getTracks().forEach((track) => connections.addTrack(track, localStream));
 }
 
 function handleLocalMediaStreamError(error) {
@@ -51,16 +51,17 @@ function handleLocalMediaStreamError(error) {
 const hubConnection = new signalR.HubConnectionBuilder()
     .configureLogging(signalR.LogLevel.Debug)
     //.withUrl("https://localhost:7124/hub/rthub")
-    .withUrl("https://54.193.100.75:5000/hub/rthub")
+    .withUrl("https://serverrt20230310010844.azurewebsites.net/hub/rthub")
     .build();
-    
+
 startConnection();
 
 async function startConnection() {
     try {
-        await hubConnection.start().then(function(){
+        await hubConnection.start().then(function () {
             connectionId.innerHTML = hubConnection.connectionId;
             console.log("SignalR Connected.");
+            getId();
         });
     } catch (err) {
         console.log(err);
@@ -72,141 +73,128 @@ hubConnection.onclose(async () => {
     await startConnection();
 })
 
-function startFunction(){
-    console.log("Connected");
-}
-function startErrorCatch(err){
-    console.log(err);
-}
-
-function getId(){
-    console.log("b");
+function getId() {
     hubConnection.invoke("Join", "Sa")
-    .then(function(){
-        console.log("join");
-    }).catch(function(err){
-        return console.log(err.toString());
-    });
+        .then(function () {
+            console.log("join");
+            getMediaDevices();
+        }).catch(function (err) {
+            return console.log(err.toString());
+        });
 }
 
-    hubConnection.on('updateUserList', (userList) => {
-        //console.log(JSON.stringify(userList));
-        connectedUsers.innerHTML = "";
-        console.log('SignalR: called updateUserList' + JSON.stringify(userList));
-        userList.forEach((item) => {
-            let li = document.createElement("li");
-            li.id = "userId";
-            li.addEventListener("click", onclickUser, false);
-            li.myValue = item;
-            li.innerHTML = item.username + " " + item.connectionId;
-            connectedUsers.appendChild(li);
-        });
+hubConnection.on('updateUserList', (userList) => {
+    //console.log(JSON.stringify(userList));
+    connectedUsers.innerHTML = "";
+    console.log('SignalR: called updateUserList' + JSON.stringify(userList));
+    userList.forEach((item) => {
+        let li = document.createElement("li");
+        li.id = "userId";
+        li.addEventListener("click", onclickUser, false);
+        li.myValue = item;
+        li.innerHTML = item.username + " " + item.connectionId;
+        connectedUsers.appendChild(li);
     });
+});
 
-    function onDisconnect(){
-        hubConnection.invoke('onDisconnectedAsync');
+function onDisconnect() {
+    hubConnection.invoke('onDisconnectedAsync');
+}
+
+function onclickUser(item) {
+    console.log('calling user... ');
+    const targetConnectionId = item.currentTarget.myValue;
+    console.log("to: " + targetConnectionId.connectionId);
+    console.log("from: " + connectionId.innerText);
+    // Then make sure we aren't calling ourselves.
+    if (targetConnectionId.connectionId != connectionId.innerText) {
+        // Initiate a call
+        hubConnection.invoke('CallUser', { "connectionId": targetConnectionId.connectionId });
+        // UI in calling mode
+        startButton.innerText = "In Call";
+    } else {
+        console.log("Ah, nope.  Can't call yourself.");
+        startButton.innerText = "Start";
     }
+}
 
-    function onclickUser(item){
-        console.log('calling user... ');
-        const targetConnectionId = item.currentTarget.myValue;
-        console.log("to: " + targetConnectionId.connectionId);
-        console.log("from: " + connectionId.innerText);
-        // Then make sure we aren't calling ourselves.
-        if (targetConnectionId.connectionId != connectionId.innerText) {
-            // Initiate a call
-            hubConnection.invoke('CallUser', { "connectionId": targetConnectionId.connectionId });
-            // UI in calling mode
-            startButton.innerText = "In Call";
-        } else {
-            console.log("Ah, nope.  Can't call yourself.");
-            startButton.innerText = "Start";
-        }
+//incoming call
+hubConnection.on('incomingCall', (callingUser) => {
+    console.log('SignalR: incoming call from: ' + JSON.stringify(callingUser));
+    // I want to chat
+    //callButton.disabled = true;
+    hubConnection.invoke('AnswerCall', true, callingUser).catch(err => console.log(err));
+});
+
+// Add handler for the hangup button
+hangupButton.onclick = (function () {
+    console.log('hangup....');
+    // Only allow hangup if we are not idle
+    hubConnection.invoke('hangUp');
+    //closeAllConnections();
+});
+
+// Close all of our connections
+const closeAllConnections = () => {
+    console.log("WebRTC: call closeAllConnections ");
+    for (var connectionId in connections) {
+        closeConnection(connectionId);
     }
+}
 
-    //incoming call
-    hubConnection.on('incomingCall', (callingUser) => {
-        console.log('SignalR: incoming call from: ' + JSON.stringify(callingUser));
-        // I want to chat
-        //callButton.disabled = true;
-        hubConnection.invoke('AnswerCall', true, callingUser).catch(err => console.log(err));
-    });
+hubConnection.on('callAccepted', (acceptingUser) => {
+    console.log('SignalR: call accepted from: ' + JSON.stringify(acceptingUser) + '.  Initiating WebRTC call and offering my stream up...');
+    // Callee accepted our call, let's send them an offer with our video stream
+    initiateOffer(acceptingUser.connectionId, localStream); // Will use driver email in production
+});
 
-    // Add handler for the hangup button
-    hangupButton.onclick = (function () {
-        console.log('hangup....');
-        // Only allow hangup if we are not idle
-        //localStream.getTracks().forEach(track => track.stop());
-            hubConnection.invoke('hangUp');
-            //closeAllConnections();
-    });
+const initiateOffer = (partnerClientId, stream) => {
+    console.log('WebRTC: called initiateoffer: ');
+    var connection = getConnection(partnerClientId); // // get a connection for the given partner
+    connection.addStream(localStream);// add our audio/video stream
+    console.log("WebRTC: Added local stream");
 
-    // Close all of our connections
-    const closeAllConnections = () => {
-        console.log("WebRTC: call closeAllConnections ");
-        for (var connectionId in connections) {
-            closeConnection(connectionId);
-        }
+    connection.createOffer().then(offer => {
+        console.log('WebRTC: created Offer: ');
+        console.log('WebRTC: Description after offer: ', offer);
+        connection.setLocalDescription(offer).then(() => {
+            console.log('WebRTC: set Local Description: ');
+            console.log('connection before sending offer ', connection);
+            setTimeout(() => {
+                sendHubSignal(JSON.stringify({ "sdp": connection.localDescription }), partnerClientId);
+            }, 1000);
+        }).catch(err => console.error('WebRTC: Error while setting local description', err));
+    }).catch(err => console.error('WebRTC: Error while creating offer', err));
+}
+
+const getConnection = (partnerClientId) => {
+    console.log("WebRTC: called getConnection");
+    if (connections[partnerClientId]) {
+        console.log("WebRTC: connections partner client exist");
+        return connections[partnerClientId];
     }
-
-    hubConnection.on('callAccepted', (acceptingUser) => {
-        console.log('SignalR: call accepted from: ' + JSON.stringify(acceptingUser) + '.  Initiating WebRTC call and offering my stream up...');
-        // Callee accepted our call, let's send them an offer with our video stream
-        initiateOffer(acceptingUser.connectionId, localStream); // Will use driver email in production
-    });
-
-    const initiateOffer = (partnerClientId, stream) => {
-        console.log('WebRTC: called initiateoffer: ');
-        var connection = getConnection(partnerClientId); // // get a connection for the given partner
-        //console.log('initiate Offer stream: ', stream);
-        //console.log("offer connection: ", connection);
-        connection.addStream(localStream);// add our audio/video stream
-        console.log("WebRTC: Added local stream");
-    
-        connection.createOffer().then(offer => {
-            console.log('WebRTC: created Offer: ');
-            console.log('WebRTC: Description after offer: ', offer);
-            connection.setLocalDescription(offer).then(() => {
-                console.log('WebRTC: set Local Description: ');
-                console.log('connection before sending offer ', connection);
-                setTimeout(() => {
-                    sendHubSignal(JSON.stringify({ "sdp": connection.localDescription }), partnerClientId);
-                }, 1000);
-            }).catch(err => console.error('WebRTC: Error while setting local description', err));
-        }).catch(err => console.error('WebRTC: Error while creating offer', err));
+    else {
+        console.log("WebRTC: initialize new connection");
+        return initializeConnection(partnerClientId)
     }
+}
 
-    const getConnection = (partnerClientId) => {
-        console.log("WebRTC: called getConnection");
-        if (connections[partnerClientId]) {
-            console.log("WebRTC: connections partner client exist");
-            return connections[partnerClientId];
-        }
-        else {
-            console.log("WebRTC: initialize new connection");
-            return initializeConnection(partnerClientId)
-        }
-    }
+const initializeConnection = (partnerClientId) => {
+    console.log('WebRTC: Initializing connection...');
+    var connection = new RTCPeerConnection(configuration);
+    connection.onicecandidate = evt => callbackIceCandidate(evt, connection, partnerClientId); // ICE Candidate Callback
+    connection.onaddstream = evt => callbackAddStream(connection, evt); // Add stream handler callback
+    connection.onremovestream = evt => callbackRemoveStream(connection, evt); // Remove stream handler callback
+    connections[partnerClientId] = connection; // Store away the connection based on username
+    return connection;
+}
 
-    const initializeConnection = (partnerClientId) => {
-        console.log('WebRTC: Initializing connection...');
-        var connection = new RTCPeerConnection(configuration);
-        connection.onicecandidate = evt => callbackIceCandidate(evt, connection, partnerClientId); // ICE Candidate Callback
-        connection.onaddstream = evt => callbackAddStream(connection, evt); // Add stream handler callback
-        connection.onremovestream = evt => callbackRemoveStream(connection, evt); // Remove stream handler callback
-        connections[partnerClientId] = connection; // Store away the connection based on username
-        return connection;
-    }
-
-    // Hub Callback: Call Declined
-    hubConnection.on('callDeclined', (decliningUser, reason) => {
+// Hub Callback: Call Declined
+hubConnection.on('callDeclined', (decliningUser, reason) => {
     console.log('SignalR: call declined from: ' + decliningUser.connectionId);
 });
 
 hubConnection.on('callEnded', (signalingUser, signal) => {
-    //console.log(signalingUser);
-    //console.log(signal);
-
     console.log('SignalR: call with ' + signalingUser.connectionId + ' has ended: ' + signal);
     // Close the WebRTC connection
     closeConnection(signalingUser.connectionId);
@@ -216,12 +204,10 @@ hubConnection.on('callEnded', (signalingUser, signal) => {
 const closeConnection = (partnerClientId) => {
     console.log("WebRTC: called closeConnection ");
     var connection = connections[partnerClientId];
-
     if (connection) {
         // Let the user know which streams are leaving
         // todo: foreach connection.remoteStreams -> onStreamRemoved(stream.id)
         onStreamRemoved(null, null);
-
         // Close the connection
         connection.close();
         delete connections[partnerClientId]; // Remove the property
@@ -243,19 +229,14 @@ function sendMessage() {
         })
 }
 
-    // Hub Callback: WebRTC Signal Received
+// Hub Callback: WebRTC Signal Received
 hubConnection.on('receiveSignal', (signalingUser, signal) => {
-    //console.log('WebRTC: receive signal ');
-    //console.log(signalingUser);
-    //console.log('NewSignal', signal);
     newSignal(signalingUser.connectionId, signal);
 });
 
 // Hand off a new signal from the signaler to the connection
 const newSignal = (partnerClientId, data) => {
     console.log('WebRTC: called newSignal');
-    //console.log('connections: ', connections);
-
     var signal = JSON.parse(data);
     var connection = getConnection(partnerClientId);
     console.log("connection: ", connection);
@@ -290,9 +271,7 @@ const receivedSdpSignal = (connection, partnerClientId, sdp) => {
                 connection.setLocalDescription(desc, () => {
                     console.log('WebRTC: set Local Description...');
                     console.log('connection.localDescription: ', connection.localDescription);
-                    //setTimeout(() => {
                     sendHubSignal(JSON.stringify({ "sdp": connection.localDescription }), partnerClientId);
-                    //}, 1000);
                 }, errorHandler);
             }, errorHandler);
         } else if (connection.remoteDescription.type == "answer") {
@@ -302,23 +281,17 @@ const receivedSdpSignal = (connection, partnerClientId, sdp) => {
 }
 
 const receivedCandidateSignal = (connection, partnerClientId, candidate) => {
-    //console.log('candidate', candidate);
-    //if (candidate) {
     console.log('WebRTC: adding full candidate');
     connection.addIceCandidate(new RTCIceCandidate(candidate));
-  
 }
 
 const callbackAddStream = (connection, evt) => {
     console.log('WebRTC: called callbackAddStream');
     // Bind the remote stream to the partner window
-    //var otherVideo = document.querySelector('.video.partner');
-    //attachMediaStream(otherVideo, evt.stream); // from adapter.js
     attachMediaStream(evt);
 }
 
 attachMediaStream = (e) => {
-    //console.log(e);
     console.log("OnPage: called attachMediaStream");
     if (incomingVideo.srcObject !== e.stream) {
         incomingVideo.srcObject = e.stream;
@@ -328,10 +301,8 @@ attachMediaStream = (e) => {
 
 const callbackIceCandidate = (evt, connection, partnerClientId) => {
     console.log("WebRTC: Ice Candidate callback");
-    //console.log("evt.candidate: ", evt.candidate);
     if (evt.candidate) {// Found a new candidate
         console.log('WebRTC: new ICE candidate');
-        //console.log("evt.candidate: ", evt.candidate);
         sendHubSignal(JSON.stringify({ "candidate": evt.candidate }), partnerClientId);
     } else {
         // Null candidate means we are done collecting candidates.
